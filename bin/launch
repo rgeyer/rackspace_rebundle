@@ -11,10 +11,12 @@
 require "rubygems"
 require "right_rackspace"
 require "pp"
+require "yaml"
 
 name = ARGV[0]
 image_id = ARGV[1]
-flavor_id = ARGV[2]
+output = ARGV[2]
+flavor_id = ARGV[3]
 
 unless name && image_id
   puts "Syntax: launch <server_name> <image_id>" 
@@ -26,6 +28,16 @@ end
 # must use same size or larger. Smaller sizes will fail.
 # So it is recommended that you leave it alone if possible.
 flavor_id = flavor_id || 1  # 256M
+
+# output.  One of [human, json, yaml].  If nothing (or an unknown value),
+# is supplied, the default is human
+output = output || "human"
+unless ["human", "json", "yaml"].include?(output)
+  output = "human"
+end
+
+logger = Logger::new(STDOUT)
+logger.level = Logger::Severity::UNKNOWN unless output == "human"
 
 
 account = ENV["RACKSPACE_ACCOUNT"]
@@ -49,8 +61,15 @@ class Object
 end
 
 # Create new server using given image_id
-rackspace_api = ::Rightscale::Rackspace::Interface::new(account, token ,:verbose_errors => true)
+rackspace_api = ::Rightscale::Rackspace::Interface::new(account, token ,{:verbose_errors => true, :logger => logger})
 data = rackspace_api.create_server(:name => server[:name], :image_id => server[:image_id], :flavor_id => server[:flavor_id] )
 
 # Display info - like public IP addr and passwd
-pp data
+case output
+  when "human"
+    pp data
+  when "json"
+    puts data.to_json
+  when "yaml"
+    puts data.to_yaml
+end
