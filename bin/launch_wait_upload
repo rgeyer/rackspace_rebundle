@@ -1,0 +1,55 @@
+#!/usr/bin/env ruby
+require "rubygems"
+require "pp"
+require "yaml"
+require "right_rackspace"
+
+instance_name = ARGV[0]
+image_id = ARGV[1]
+image_type = ARGV[2]
+
+timeout_backoff = [2,5,10,15]
+
+launch_bin = ::File.expand_path(::File.join(File.dirname(__FILE__),"launch"))
+upload_bin = ::File.expand_path(::File.join(File.dirname(__FILE__),"upload"))
+
+account = ENV["RACKSPACE_ACCOUNT"]
+token = ENV["RACKSPACE_API_TOKEN"]
+unless account && token
+  puts "ERROR: you must define RACKSPACE_ACCOUNT and RACKSPACE_API_TOKEN in your env."
+  exit 1
+end
+
+# monkey patch: right_rackspace currently depends on rails .blank? method.
+class Object
+  def blank?
+    respond_to?(:empty?) ? empty? : !self
+  end
+end
+
+rackspace_api = ::Rightscale::Rackspace::Interface::new(account, token ,:verbose_errors => true)
+
+yaml_result = `#{launch_bin} #{instance_name} #{image_id} yaml`
+hash_result = YAML::load(yaml_result)
+
+pp hash_result
+
+begin
+  idx=0
+  Timeout::timeout(10*60) do
+    while true
+      server = rackspace_api.get_server(hash_result["server"]["id"])
+      server_active = server["server"]["status"] == "ACTIVE"
+      unless server_active
+        sleep timeout_backoff[idx] || timeout_backoff.last
+        idx += 1
+      else
+        break
+      end
+    end
+  end
+rescue Timeout::Error
+  ::Chef::Log.error("Waited 10 minutes for server to become active.")
+end
+
+`#{upload_bin} #{hash_result["server"]["addresses"]["public"]} #{image_type} #{hash_result["server"]["adminPass"]}`
