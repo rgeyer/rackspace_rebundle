@@ -16,7 +16,10 @@ require "yaml"
 name = ARGV[0]
 image_id = ARGV[1]
 output = ARGV[2]
-flavor_id = ARGV[3]
+wait_timeout = ARGV[3]
+flavor_id = ARGV[4]
+
+timeout_backoff = [2,5,10,15]
 
 unless name && image_id
   puts "Syntax: launch <server_name> <image_id>" 
@@ -35,6 +38,11 @@ output = output || "human"
 unless ["human", "json", "yaml"].include?(output)
   output = "human"
 end
+
+# wait_timeout. The timeout (in seconds) that the script will block while
+# waiting for the instance to become active.  If set to 0 the script will
+# return immediately
+wait_timeout = wait_timeout.to_i || 0
 
 logger = Logger::new(STDOUT)
 logger.level = Logger::Severity::UNKNOWN unless output == "human"
@@ -63,6 +71,25 @@ end
 # Create new server using given image_id
 rackspace_api = ::Rightscale::Rackspace::Interface::new(account, token ,{:verbose_errors => true, :logger => logger})
 data = rackspace_api.create_server(:name => server[:name], :image_id => server[:image_id], :flavor_id => server[:flavor_id] )
+
+begin
+  idx=0
+  start = Time.now.to_i
+  while true
+    delta = Time.now.to_i - start
+    raise Timeout::Error.new if delta > wait_timeout
+    data.merge(rackspace_api.get_server(data["server"]["id"]))
+    server_active = data["server"]["status"] == "ACTIVE"
+    unless server_active
+      sleep timeout_backoff[idx] || timeout_backoff.last
+      idx += 1
+    else
+      break
+    end
+  end
+rescue Timeout::Error
+  puts "Waited #{wait_timeout} seconds for server to become active."
+end unless wait_timeout == 0
 
 # Display info - like public IP addr and passwd
 case output
