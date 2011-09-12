@@ -7,10 +7,5 @@
 #
 # cary@rightscale.com
 #
-password = ARGV[2]
-scp_creds = "root"
-scp_creds += ":#{password}" if password
-
-
 raise "Specify distro as: centos or ubuntu" unless ARGV[1]
-puts `scp -r #{ARGV[1]}/* packagediff.sh #{scp_creds}@#{ARGV[0]}:/root/`
+puts `scp -r #{ARGV[1]}/* packagediff.sh root@#{ARGV[0]}:/root/`
