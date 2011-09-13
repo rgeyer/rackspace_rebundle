@@ -78,7 +78,7 @@ begin
   while true
     delta = Time.now.to_i - start
     raise Timeout::Error.new if delta > wait_timeout
-    data.merge(rackspace_api.get_server(data["server"]["id"]))
+    data.merge!(rackspace_api.get_server(data["server"]["id"]))
     server_active = data["server"]["status"] == "ACTIVE"
     unless server_active
       sleep timeout_backoff[idx] || timeout_backoff.last
