@@ -84,7 +84,7 @@ begin
       sleep timeout_backoff[idx] || timeout_backoff.last
       idx += 1
     else
-      data = tmp_hash.merge(data)
+      data = {"server" => data["server"].merge(tmp_hash["server"])}
       break
     end
   end
